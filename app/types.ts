@@ -14,4 +14,5 @@ export interface BoardConfig {
   end: Point;
   rocks: Point[];
   grid: string[];
+  request_id: number;
 }
