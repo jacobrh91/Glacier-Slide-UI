@@ -1,12 +1,10 @@
 # Glacier Slide
 
 Welcome to Glacier Slide, a simple puzzle game where to navigate from the start
-to the end.
+to the end while sliding on ice.
 
 This UI relies on the [Rust backend server](https://github.com/jacobrh91/Glacier-Slide) to be set up and running on
 "http://localhost:7878" to fetch new levels.
-
-Found here
 
 ## Getting Started
 
@@ -19,7 +17,7 @@ npm run start
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to play the game.
 
-## Example
+## Examples
 
 ### Easy Level
 
