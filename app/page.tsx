@@ -6,7 +6,7 @@ import {
   useRef,
   useState,
 } from 'react';
-import { Coord, Point, BoardConfig, toPoint } from './types';
+import { Point, BoardConfig, toPoint } from './types';
 
 import { slide, type Direction } from './boardLogic';
 import { Board } from './Board';
