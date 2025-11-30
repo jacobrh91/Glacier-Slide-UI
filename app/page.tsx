@@ -1,103 +1,16 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState, CSSProperties } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from 'react';
 import { Coord, Point, BoardConfig, toPoint } from './types';
 
-type Direction = 'up' | 'down' | 'left' | 'right';
-type Difficulty = 'easy' | 'medium' | 'hard' | 'extreme';
-
-const CELL_SIZE = 64;               // virtual cell size used for logic/layout
-const BASE_BOARD_CELLS = 9;         // easy board is 9x9
-const FIXED_BOARD_SIZE = CELL_SIZE * BASE_BOARD_CELLS; // px: fixed visual size
-
-// ---------------------------------------------------------------------------
-// Colors & visual constants
-// ---------------------------------------------------------------------------
-
-// Board tiles
-const ICE_COLOR = '#299ADCB3';
-const ROCK_COLOR = '#434d5dff';
-const WALL_COLOR = '#30353dff';
-const GOAL_COLOR = '#10b981';
-const START_COLOR = '#6366f1';
-
-// Page / text
-const COLOR_BG = '#020617';
-const COLOR_TEXT = '#e5e7eb';
-const COLOR_MUTED = '#9ca3af';
-const COLOR_ACCENT = '#a5b4fc';
-const COLOR_BORDER_DEFAULT = '#4b5563';
-
-// Cards / containers
-const COLOR_CARD_BG_GRADIENT = `radial-gradient(circle at top, rgba(56,189,248,0.2), ${COLOR_BG})`;
-const COLOR_CARD_BORDER = 'rgba(30,64,175,0.8)';
-const COLOR_CARD_SHADOW = '0 18px 35px rgba(15,23,42,0.8)';
-
-// Overlay (win screen)
-const COLOR_OVERLAY_BG = 'rgba(15,23,42,0.65)';
-const COLOR_OVERLAY_TEXT = '#f9fafb';
-const COLOR_OVERLAY_TEXT_SHADOW =
-  '0 4px 10px rgba(0,0,0,0.7), 0 0 20px rgba(56,189,248,0.9)';
-const COLOR_OVERLAY_TEXT_SECONDARY = '#e5e7eb';
-const COLOR_OVERLAY_TEXT_SECONDARY_SHADOW = '0 2px 6px rgba(0,0,0,0.6)';
-
-// Player
-const COLOR_PLAYER_BG = 'rgba(250, 204, 21, 0.95)';
-const COLOR_PLAYER_TEXT = COLOR_BG;
-
-// Status / error
-const COLOR_ERROR = '#f87171';
-
-// Spinner
-const COLOR_SPINNER_BORDER = COLOR_BORDER_DEFAULT;
-const COLOR_SPINNER_BORDER_TOP = COLOR_TEXT;
-
-// ---------------------------------------------------------------------------
-// Game helpers
-// ---------------------------------------------------------------------------
-
-const isRock = (config: BoardConfig, col: number, row: number): boolean =>
-  config.rocks.some((p) => p.col === col && p.row === row);
-
-const inBounds = (config: BoardConfig, col: number, row: number): boolean =>
-  col >= 0 && row >= 0 && col < config.cols && row < config.rows;
-
-const isWall = (config: BoardConfig, col: number, row: number): boolean => {
-  const { rows, cols, start, end } = config;
-
-  const isEdge = row === 0 || col === 0 || row === rows - 1 || col === cols - 1;
-
-  const isStart = col === start.col && row === start.row;
-  const isEnd = col === end.col && row === end.row;
-
-  return isEdge && !isStart && !isEnd;
-};
-
-function slide(config: BoardConfig, from: Point, dir: Direction): Point {
-  const delta: Record<Direction, Coord> = {
-    up: [0, -1],
-    down: [0, 1],
-    left: [-1, 0],
-    right: [1, 0],
-  };
-
-  let { col, row } = from;
-  const [delta_col, delta_row] = delta[dir];
-
-  while (true) {
-    const new_col = col + delta_col;
-    const new_row = row + delta_row;
-
-    if (!inBounds(config, new_col, new_row)) break;
-    if (isRock(config, new_col, new_row)) break;
-    if (isWall(config, new_col, new_row)) break;
-
-    col = new_col;
-    row = new_row;
-  }
-
-  return { col, row };
-}
+import { slide, type Direction } from './boardLogic';
+import { Board } from './Board';
+import { COLORS, DIFFICULTIES, Difficulty, SPINNER_STYLE } from './constants';
 
 export default function Page() {
   const [difficulty, setDifficulty] = useState<Difficulty>('easy');
@@ -273,77 +186,6 @@ export default function Page() {
     return () => window.removeEventListener('keydown', handler);
   }, [move, reset]);
 
-  // ----- BOARD SIZING / SCALING -----
-  const longestSide = level ? Math.max(level.rows, level.cols) : BASE_BOARD_CELLS;
-  const scale = FIXED_BOARD_SIZE / (longestSide * CELL_SIZE);
-
-  const boardStyle: CSSProperties = {
-    position: 'relative',
-    width: (level?.cols ?? BASE_BOARD_CELLS) * CELL_SIZE,
-    height: (level?.rows ?? BASE_BOARD_CELLS) * CELL_SIZE,
-    display: 'grid',
-    gridTemplateColumns: `repeat(${level?.cols ?? BASE_BOARD_CELLS}, ${CELL_SIZE}px)`,
-    gridTemplateRows: `repeat(${level?.rows ?? BASE_BOARD_CELLS}, ${CELL_SIZE}px)`,
-    boxSizing: 'border-box',
-  };
-
-  const cellStyle: CSSProperties = {
-    width: CELL_SIZE,
-    height: CELL_SIZE,
-    boxSizing: 'border-box',
-    border: 'none',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    fontSize: 18,
-    position: 'relative',
-  };
-
-  const playerStyle: CSSProperties = {
-    position: 'absolute',
-    width: CELL_SIZE,
-    height: CELL_SIZE,
-    transform: `translate3d(${player.col * CELL_SIZE}px, ${player.row * CELL_SIZE}px, 0)`,
-    transition: `transform ${animDuration}s ease-out`,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 25,
-    fontSize: 28,
-    backgroundColor: COLOR_PLAYER_BG,
-    color: COLOR_PLAYER_TEXT,
-    pointerEvents: 'none',
-  };
-
-  const gap = 2;
-
-  const obstacleStyle: CSSProperties = {
-    width: CELL_SIZE - gap,
-    height: CELL_SIZE - gap,
-    borderRadius: 10,
-  };
-
-  const rockInnerStyle: CSSProperties = {
-    ...obstacleStyle,
-    backgroundColor: ROCK_COLOR,
-  };
-
-  const wallInnerStyle: CSSProperties = {
-    ...obstacleStyle,
-    backgroundColor: WALL_COLOR,
-  };
-
-  const difficultyOrder: Difficulty[] = ['easy', 'medium', 'hard', 'extreme'];
-
-  const spinnerStyle: CSSProperties = {
-    width: 16,
-    height: 16,
-    borderRadius: '50%',
-    border: `2px solid ${COLOR_SPINNER_BORDER}`,
-    borderTopColor: COLOR_SPINNER_BORDER_TOP,
-    animation: 'spin 0.8s linear infinite',
-  };
-
   return (
     <main
       style={{
@@ -352,12 +194,11 @@ export default function Page() {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        background: COLOR_BG,
-        color: COLOR_TEXT,
+        background: COLORS.BG,
+        color: COLORS.TEXT,
         fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, sans-serif',
       }}
     >
-      {/* Keyframes for spinner */}
       <style>{`
         @keyframes spin {
           from { transform: rotate(0deg); }
@@ -379,13 +220,11 @@ export default function Page() {
             fontSize: 14,
             maxWidth: 450,
             textAlign: 'center',
-            color: COLOR_MUTED,
+            color: COLORS.MUTED,
           }}
         >
           Use the arrow keys (or WASD) to move. Press Space to restart.
         </p>
-
-        {/* Difficulty buttons */}
         <div
           style={{
             display: 'flex',
@@ -393,7 +232,7 @@ export default function Page() {
             marginBottom: 4,
           }}
         >
-          {difficultyOrder.map((d) => {
+          {DIFFICULTIES.map((d) => {
             const selected = d === difficulty;
             const isBusy = loading && selected;
 
@@ -405,10 +244,10 @@ export default function Page() {
                   padding: '6px 12px',
                   borderRadius: 999,
                   border: selected
-                    ? `1px solid ${COLOR_ACCENT}`
-                    : `1px solid ${COLOR_BORDER_DEFAULT}`,
-                  background: selected ? '#111827' : COLOR_BG,
-                  color: selected ? COLOR_TEXT : COLOR_MUTED,
+                    ? `1px solid ${COLORS.ACCENT}`
+                    : `1px solid ${COLORS.CARD_BORDER}`,
+                  background: selected ? '#111827' : COLORS.BG,
+                  color: selected ? COLORS.TEXT : COLORS.MUTED,
                   fontSize: 13,
                   cursor: isBusy ? 'default' : 'pointer',
                   display: 'flex',
@@ -419,26 +258,24 @@ export default function Page() {
                 }}
               >
                 {d.charAt(0).toUpperCase() + d.slice(1)}
-                {loading && selected && <span style={spinnerStyle} />}
+                {loading && selected && <span style={SPINNER_STYLE} />}
               </button>
             );
           })}
         </div>
-
         <div
           style={{
             fontSize: 14,
             marginBottom: 8,
-            color: COLOR_ACCENT,
+            color: COLORS.ACCENT,
           }}
         >
           Games won: <strong>{wins}</strong>
         </div>
-
         {error && (
           <div
             style={{
-              color: COLOR_ERROR,
+              color: COLORS.ERROR,
               fontSize: 13,
               marginBottom: 8,
             }}
@@ -446,135 +283,28 @@ export default function Page() {
             {error}
           </div>
         )}
-
         {loading && !level && (
           <div
             style={{
               fontSize: 14,
               marginBottom: 8,
-              color: COLOR_MUTED,
+              color: COLORS.MUTED,
               display: 'flex',
               alignItems: 'center',
               gap: 8,
             }}
           >
-            <span style={spinnerStyle} />
+            <span style={SPINNER_STYLE} />
             Loading level...
           </div>
         )}
-
-        <div
-          style={{
-            padding: 16,
-            borderRadius: 16,
-            background: COLOR_CARD_BG_GRADIENT,
-            boxShadow: COLOR_CARD_SHADOW,
-            border: `1px solid ${COLOR_CARD_BORDER}`,
-          }}
-        >
-          {/* Fixed-size board container */}
-          <div
-            style={{
-              width: FIXED_BOARD_SIZE,
-              height: FIXED_BOARD_SIZE,
-              position: 'relative',
-              overflow: 'hidden',
-            }}
-          >
-            {level && (
-              <>
-                {/* Scaled board */}
-                <div
-                  style={{
-                    ...boardStyle,
-                    transform: `scale(${scale})`,
-                    transformOrigin: 'top left',
-                    opacity: loading ? 0.5 : 1,
-                    transition: 'opacity 0.2s ease-out',
-                  }}
-                >
-                  {Array.from({ length: level.rows * level.cols }).map(
-                    (_, idx) => {
-                      const row = Math.floor(idx / level.cols);
-                      const col = idx % level.cols;
-
-                      const isStart =
-                        col === level.start.col && row === level.start.row;
-                      const isEnd =
-                        col === level.end.col && row === level.end.row;
-                      const rock = isRock(level, col, row);
-                      const wall = isWall(level, col, row);
-
-                      let bg = ICE_COLOR; // default: ice
-                      if (isEnd) bg = GOAL_COLOR; // goal
-                      if (isStart) bg = START_COLOR; // start
-
-                      return (
-                        <div
-                          key={`${row}-${col}`}
-                          style={{
-                            ...cellStyle,
-                            backgroundColor: bg,
-                          }}
-                        >
-                          {wall && <div style={wallInnerStyle} />}
-                          {rock && <div style={rockInnerStyle} />}
-                          {isEnd && !rock && !wall && 'End'}
-                          {isStart && !rock && !wall && 'Start'}
-                        </div>
-                      );
-                    }
-                  )}
-
-                  {/* Player */}
-                  <div style={playerStyle}></div>
-                </div>
-
-                {/* YOU WON overlay */}
-                {won && (
-                  <div
-                    style={{
-                      position: 'absolute',
-                      inset: 0,
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      background: COLOR_OVERLAY_BG,
-                      pointerEvents: 'none',
-                      gap: 12,
-                    }}
-                  >
-                    <span
-                      style={{
-                        fontSize: 48,
-                        fontWeight: 800,
-                        letterSpacing: 3,
-                        textTransform: 'uppercase',
-                        color: COLOR_OVERLAY_TEXT,
-                        textShadow: COLOR_OVERLAY_TEXT_SHADOW,
-                      }}
-                    >
-                      You Won!
-                    </span>
-
-                    <span
-                      style={{
-                        fontSize: 18,
-                        fontWeight: 500,
-                        color: COLOR_OVERLAY_TEXT_SECONDARY,
-                        opacity: 0.9,
-                        textShadow: COLOR_OVERLAY_TEXT_SECONDARY_SHADOW,
-                      }}
-                    >
-                      Press Space to play again
-                    </span>
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-        </div>
+        <Board
+          level={level}
+          loading={loading}
+          player={player}
+          animDuration={animDuration}
+          won={won}
+        />
       </div>
     </main>
   );
