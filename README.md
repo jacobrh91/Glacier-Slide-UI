@@ -8,7 +8,7 @@ This UI relies on the [Rust backend server](https://github.com/jacobrh91/Glacier
 
 ## Getting Started
 
-First, run the server:
+Run the server using npm:
 
 ```bash
 npm run build
